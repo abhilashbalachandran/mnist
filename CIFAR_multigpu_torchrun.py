@@ -229,9 +229,11 @@ def evaluate(batch_size):
     test_dataset = perpare_dataloader(dataset=test_dataset, batch_size=batch_size, type="test")
     #load model
     model = Net()
-    model.load_state_dict(torch.load("data/weights/cifar_net_ddp.pth"))
+    loc = f"cuda:{1}"
+    snapshot = torch.load("data/weights/snapshot.pt", map_location=loc)
+    model.load_state_dict(snapshot["MODEL_STATE"])
     model.eval()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") ## specify the GPU id's, GPU id's start from 0.
+    device = torch.device(f"{loc}" if torch.cuda.is_available() else "cpu") ## specify the GPU id's, GPU id's start from 0.
     print(f"using gpu = {device}")
     tester = Tester(model=model, test_data=test_dataset,device=device)
     tester.calculate_total_accuracy()
@@ -247,4 +249,5 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', default=32, type=int, help='Input batch size on each device (default: 32)')
     args = parser.parse_args()
     
-    main(args.save_every, args.total_epochs, args.batch_size)
+    # main(args.save_every, args.total_epochs, args.batch_size)
+    evaluate(args.batch_size)

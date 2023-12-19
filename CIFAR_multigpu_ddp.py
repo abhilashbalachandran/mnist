@@ -219,9 +219,7 @@ def evaluate(batch_size):
     test_dataset = perpare_dataloader(dataset=test_dataset, batch_size=batch_size, type="test")
     #load model
     model = Net()
-    loc = f"cuda:{1}"
-    snapshot = torch.load("data/weights/cifar_net_ddp.pt", map_location=loc)
-    model.load_state_dict(snapshot["MODEL_STATE"])
+    model.load_state_dict(torch.load("/data/weights/cifar_net_ddp.pth"))
     model.eval()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") ## specify the GPU id's, GPU id's start from 0.
     print(f"using gpu = {device}")
