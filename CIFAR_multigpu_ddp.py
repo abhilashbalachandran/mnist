@@ -114,7 +114,7 @@ class Trainer:
     
     def _save_checkpoint(self, epoch):
         ckp = self.model.module.state_dict() #notice model.module
-        PATH = "cifar_net_ddp.pth"
+        PATH = "data/weights/cifar_net_ddp.pth"
         torch.save(ckp, PATH)
         print(f"Epoch {epoch} | Training checkpoint saved at {PATH}")
 
@@ -219,7 +219,7 @@ def evaluate(batch_size):
     test_dataset = perpare_dataloader(dataset=test_dataset, batch_size=batch_size, type="test")
     #load model
     model = Net()
-    model.load_state_dict(torch.load("cifar_net_ddp.pth"))
+    model.load_state_dict(torch.load("data/data/weights/cifar_net_ddp.pth"))
     model.eval()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") ## specify the GPU id's, GPU id's start from 0.
     print(f"using gpu = {device}")
