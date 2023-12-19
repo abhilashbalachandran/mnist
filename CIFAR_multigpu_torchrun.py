@@ -22,17 +22,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP #used to distributi
 from torch.distributed import init_process_group, destroy_process_group 
 
 
-def ddp_setup(rank, world_size):
-    '''
-    Args:
-        rank: unique id assigned to each process (assigned by torch mp)
-        world_size: total num processes to be spawned in a group
-    '''
-    os.environ['MASTER_ADDR'] = "localhost" #running master on localhost
-    os.environ["MASTER_PORT"] = "12355" # any free port
-    print(f"os environ variables MASTER_ADDR = {os.environ.get('MASTER_ADDR')}, MASTER_PORT = {os.environ.get('MASTER_PORT')}")
-    init_process_group(backend="nccl", rank=rank, world_size=world_size) #nccl = nvidia collective communications library
-    torch.cuda.set_device(rank)
+def ddp_setup():
+    init_process_group(backend="nccl") #nccl = nvidia collective communications library, torchrun autohandles setting env variables
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"])) #get rank from env variable
 
 def imshow(img):
     img = img / 2 + 0.5     # unnormalize
@@ -66,18 +58,29 @@ class Trainer:
             model: torch.nn.Module, 
             train_data: DataLoader,
             optimizer: torch.optim.Optimizer,
-            gpu_id: int,
             save_every: int,
-            world_size: int,
+            snapshot_path: str
 
     )-> None:
-        self.gpu_id = gpu_id
-        self.model = model.to(gpu_id)
+        self.gpu_id = int(os.environ["LOCAL_RANK"])
+        self.model = model.to(self.gpu_id)
         self.train_data = train_data
         self.optimizer = optimizer
         self.save_every = save_every
-        self.model = DDP(model, device_ids = [gpu_id])
-        self.world_size = world_size
+        self.epochs_run = 0
+        self.snapshot_path = snapshot_path
+        #if snapshot exists, load from that
+        if os.path.exists(snapshot_path):
+            print(f"Loading snapshot from ={snapshot_path}")
+            self._load_snapshot()
+        self.model = DDP(self.model, device_ids = [self.gpu_id])
+
+    def _load_snapshot(self):
+        loc = f"cuda:{self.gpu_id}"
+        snapshot = torch.load(self.snapshot_path, map_location=loc)
+        self.model.load_state_dict(snapshot["MODEL_STATE"])
+        self.epochs_run = snapshot["EPOCHS_RUN"]
+        print(f"resuming training from snapshot at Epoch {self.epochs_run}")
 
     def _run_batch(self, source, targets):
         self.optimizer.zero_grad()
@@ -111,7 +114,14 @@ class Trainer:
             print(f"Average epoch loss: {average_loss*1e2:.4f}")
 
             
-    
+    def _save_snapshot(self,epoch):
+        snapshot = {
+            "MODEL_STATE": self.model.module.state_dict(),
+            "EPOCHS_RUN": epoch
+        }
+        torch.save(snapshot, self.snapshot_path)
+        print(f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
+
     def _save_checkpoint(self, epoch):
         ckp = self.model.module.state_dict() #notice model.module
         PATH = "data/weights/cifar_net_ddp.pth"
@@ -122,7 +132,7 @@ class Trainer:
         for epoch in range(max_epochs):
             self._run_epoch(epoch)
             if self.gpu_id==0 and epoch%self.save_every==0: #only save model from master process. Since they are synchronized, it should be same across all processes
-                self._save_checkpoint(epoch)
+                self._save_snapshot(epoch)
 
 
 def load_train_objs(transform=None):
@@ -195,18 +205,18 @@ class Tester:
             print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
 
 
-def main(rank:int, world_size:int, save_every: int, total_epochs: int, batch_size: int):
+def main(save_every: int, total_epochs: int, batch_size: int, snapshot_path: str = "data/weights/snapshot.pt"):
     #setup ddp and train data
     transform = transforms.Compose(
         [transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    ddp_setup(rank, world_size)
+    ddp_setup()
     dataset, model, optimizer = load_train_objs(transform=transform)
 
     dataset = torchvision.datasets.CIFAR10(root='./data', train=True,
                                         download=True, transform=transform)
     train_data = perpare_dataloader(dataset=dataset, batch_size=batch_size)
-    trainer = Trainer(model, train_data, optimizer, rank, save_every, world_size=world_size)
+    trainer = Trainer(model, train_data, optimizer, save_every,snapshot_path=snapshot_path)
     trainer.train(total_epochs)
     destroy_process_group()
 
@@ -219,9 +229,7 @@ def evaluate(batch_size):
     test_dataset = perpare_dataloader(dataset=test_dataset, batch_size=batch_size, type="test")
     #load model
     model = Net()
-    loc = f"cuda:{1}"
-    snapshot = torch.load("data/weights/cifar_net_ddp.pt", map_location=loc)
-    model.load_state_dict(snapshot["MODEL_STATE"])
+    model.load_state_dict(torch.load("data/weights/cifar_net_ddp.pth"))
     model.eval()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") ## specify the GPU id's, GPU id's start from 0.
     print(f"using gpu = {device}")
@@ -239,7 +247,4 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', default=32, type=int, help='Input batch size on each device (default: 32)')
     args = parser.parse_args()
     
-    world_size = torch.cuda.device_count()
-    print(f"using world size = {world_size}")
-    mp.spawn(main, args=(world_size, args.save_every, args.total_epochs, args.batch_size), nprocs=world_size)
-    evaluate(args.batch_size)
+    main(args.save_every, args.total_epochs, args.batch_size)
