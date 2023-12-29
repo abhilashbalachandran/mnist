@@ -31,7 +31,7 @@ def ddp_setup(rank, world_size):
     # os.environ["MASTER_PORT"] = "12355" # any free port
     # print(f"os environ variables MASTER_ADDR = {os.environ.get('MASTER_ADDR')}, MASTER_PORT = {os.environ.get('MASTER_PORT')}")
     init_process_group(backend="nccl", rank=rank, world_size=world_size) #nccl = nvidia collective communications library
-    torch.cuda.set_device(0)
+    torch.cuda.set_device(rank % torch.cuda.device_count())
 
 def imshow(img):
     img = img / 2 + 0.5     # unnormalize
@@ -70,12 +70,12 @@ class Trainer:
             world_size: int,
 
     )-> None:
-        self.gpu_id = 0
-        self.model = model.to('cuda:0')
+        self.gpu_id = rank % torch.cuda.device_count()
+        self.model = model.to(f'cuda:{self.gpu_id}')
         self.train_data = train_data
         self.optimizer = optimizer
         self.save_every = save_every
-        self.model = DDP(model, device_ids = [0])
+        self.model = DDP(model, device_ids = [self.gpu_id])
         self.world_size = world_size
 
     def _run_batch(self, source, targets):

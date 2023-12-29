@@ -10,9 +10,8 @@ RUN pip install 'git+https://github.com/lanpa/tensorboardX' && \
 RUN mkdir -p /opt/mnist
 
 WORKDIR /opt/mnist/src
-ADD mnist.py /opt/mnist/src/mnist.py
-ADD CIFAR_multinode_torchrun.py /opt/mnist/src/CIFAR_multinode_torchrun.py
-ADD CIFAR_multigpu_kube.py /opt/mnist/src/CIFAR_multigpu_kube.py
+ADD scripts/CIFAR_multinode_torchrun.py /opt/mnist/src/CIFAR_multinode_torchrun.py
+ADD scripts/CIFAR_multigpu_kube.py /opt/mnist/src/CIFAR_multigpu_kube.py
 
 
 RUN  chgrp -R 0 /opt/mnist \
