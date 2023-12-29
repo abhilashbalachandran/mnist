@@ -1,6 +1,6 @@
 import os
 #set 1,2,3 gpu
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 import torch
 import torchvision
 import torchvision.transforms as transforms

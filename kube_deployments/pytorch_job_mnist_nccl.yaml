@@ -1,0 +1,52 @@
+apiVersion: "kubeflow.org/v1"
+kind: "PyTorchJob"
+metadata:
+  name: "pytorch-dist-mnist-nccl"
+spec:
+  pytorchReplicaSpecs:
+    Master:
+      replicas: 1
+      restartPolicy: OnFailure
+      template:
+        metadata:
+          annotations:
+            sidecar.istio.io/inject: "false"
+        spec:
+          containers:
+            - name: pytorch
+              image: localhost:32000/my_cifar
+              env:
+                - name: MASTER_ADDR
+                  value: "pytorch-dist-mnist-nccl-master"
+                - name: MASTER_PORT
+                  value: "23456"
+                - name: WORLD_SIZE
+                  value: "2"
+                - name: RANK
+                  value: "0"
+              resources: 
+                limits:
+                  nvidia.com/gpu: 1
+    Worker:
+      replicas: 1
+      restartPolicy: OnFailure
+      template:
+        metadata:
+          annotations:
+            sidecar.istio.io/inject: "false"
+        spec:
+          containers: 
+            - name: pytorch
+              image: localhost:32000/my_cifar
+              env:
+                - name: MASTER_ADDR
+                  value: "pytorch-dist-mnist-nccl-master"
+                - name: MASTER_PORT
+                  value: "23456"
+                - name: WORLD_SIZE
+                  value: "2"
+                - name: RANK
+                  value: "1"
+              resources: 
+                limits:
+                  nvidia.com/gpu: 1
