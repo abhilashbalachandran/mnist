@@ -11,6 +11,8 @@ refer to [kubeflow installation](https://www.kubeflow.org/docs/started/installin
 
 build docker image and push to a container repository. I have used a [local docker repository](https://www.docker.com/blog/how-to-use-your-own-registry-2/)
 
+make sure to change the image name inside the deployment yaml to the appropriate built image.
+
 Deploy the kubernetes deployment:
 
 ```kubectl apply -f kube_deployments pytorch_job_mnist_nccl.yaml```
